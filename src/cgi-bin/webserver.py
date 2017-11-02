@@ -138,7 +138,7 @@ print "<font size=+1>Environment</font></br>";
 print "<pre>"
 
 TCP_IP = '127.0.0.1'
-TCP_PORT_BASE = 5000
+TCP_PORT_BASE = 8000
 BUFFER_SIZE = 1024
 MESSAGE = "Hello, World!"
 
