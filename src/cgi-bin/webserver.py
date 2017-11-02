@@ -3,6 +3,7 @@ import cgi
 import cgitb
 import os
 import socket
+import math
 
 cgitb.enable()
 
@@ -11,14 +12,15 @@ cgitb.enable()
 # -------------------------------------------
 
 def le_parametros_html():
-
-	# Efetua a leitura dos parametros passados pelo HTML, retornando uma lista de comandos
-	# no seguinte formato: (nro_maquina, nro_comando, argumento_comando)
-	#	nro_comando:
-	#		1 - ps
-	#		2 - df
-	#		3 - finger
-	#		4 - uptime
+	'''
+	Efetua a leitura dos parametros passados pelo HTML, retornando uma lista de comandos
+	no seguinte formato: (nro_maquina, nro_comando, argumento_comando)
+		nro_comando:
+			1 - ps
+			2 - df
+			3 - finger
+			4 - uptime
+	'''
 
 	# Leitura dos parametros do HTML 
 	parametros_html = cgi.FieldStorage()
@@ -64,6 +66,67 @@ def le_parametros_html():
 
 	return tuplas_finais
 
+def monta_pacote_comando(tupla_comando, id, ip_origem, ip_destino):
+
+	# Version: 2
+	Version = '0010'
+
+	# IHL: vai ser calculado abaixo!
+	IHL = '0000'
+
+	#Type of Service: 0
+	TypeOfService = '00000000'
+
+	# Total Length: vai ser calculado abaixo!
+	TotalLength = '0000000000000000'
+
+	# Identification: posicao do comando na lista de comandos
+	Identification = "{0:{fill}16b}".format(id, fill='0')
+
+	# Flags: 000 (Requisicao)
+	Flags = '000'
+
+	# Fragment Offset: 0
+	FragmentOffset = '0000000000000'
+
+	# Time to Live: Pode ser qualquer valor	
+	TimeToLive = '10000000'	
+
+	# Protocol: depende do comando passado (ps, df, finger, uptime)
+	Protocol = "{0:{fill}8b}".format(tupla_comando[1], fill='0')
+
+	# Header Checksum: PRECISO FAZER (NAO ENTENDI O QUE EH PRA SER FEITO)!!!
+	HeaderChecksum = '0000000000000000'
+
+	# Source Address: 		
+	SourceAddress = ''.join([bin(int(x)+256)[3:] for x in ip_origem.split('.')])
+
+	# Destination Address: 
+	DestinationAddress = ''.join([bin(int(x)+256)[3:] for x in ip_destino.split('.')])
+
+	# Options: de acordo com o comando passado (pode ser vazio)
+	Options = ''.join('{0:08b}'.format(ord(x), 'b') for x in tupla_comando[2])
+
+	# Tamanho do pacote completo. Usado para calcular TotalLength e IHL corretamente
+	tamanho_pacote = len(Version + IHL + TypeOfService + TotalLength + Identification + Flags \
+						+ FragmentOffset + TimeToLive + Protocol + HeaderChecksum + SourceAddress \
+						+ DestinationAddress + Options)
+
+	# Numero de words de 32-bits necessario para o pacote
+	numero_words_necessario = int(math.ceil(float(tamanho_pacote) / 32.0))
+
+	# Atualizacao de TotalLength
+	TotalLength = "{0:{fill}16b}".format(tamanho_pacote, fill='0')
+
+	# Atualizacao de IHL
+	IHL = "{0:{fill}4b}".format(numero_words_necessario, fill='0')
+
+	pacote_pronto = (Version + IHL + TypeOfService + TotalLength + Identification + Flags \
+					+ FragmentOffset + TimeToLive + Protocol + HeaderChecksum + SourceAddress \
+					+ DestinationAddress + Options).ljust(numero_words_necessario * 32, '0')
+
+	return pacote_pronto
+
 
 # -------------------------------------------
 #                  M A I N                   |
@@ -74,30 +137,27 @@ print "<font size=+1>Environment</font></br>";
 
 print "<pre>"
 
-# Recebe os comandos a serem passados para as maquinas
-lista_comandos = le_parametros_html()
-
-# Mostra os comandos identificados na tela
-for x in lista_comandos:
-	print x
-	print "<br>"
-
-
-# TESTANDO SOCKET
-# Exemplo retirado de:
-# 	https://wiki.python.org/moin/TcpCommunication
 TCP_IP = '127.0.0.1'
-TCP_PORT = 5005
+TCP_PORT_BASE = 5000
 BUFFER_SIZE = 1024
 MESSAGE = "Hello, World!"
 
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.connect((TCP_IP, TCP_PORT))
-s.send(MESSAGE)
-data = s.recv(BUFFER_SIZE)
-s.close()
+# Recebe os comandos a serem passados para as maquinas
+lista_comandos = le_parametros_html()
 
-print "received data:", data
+for comando in lista_comandos:
+	DAEMON_PORT = TCP_PORT_BASE + comando[0]
+	pacote = monta_pacote_comando(comando, lista_comandos.index(comando), TCP_IP, TCP_IP)
+	try:
+		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		s.connect((TCP_IP, DAEMON_PORT))
+		s.send(pacote)
+		data = s.recv(BUFFER_SIZE)
+		#s.close()
+		print "Received data:", data, "from Daemon", comando[0]
+	finally:
+		# Fecha a conexao
+		s.close()
 
 print "</pre>"
 
