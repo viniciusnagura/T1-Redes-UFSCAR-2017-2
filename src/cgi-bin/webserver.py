@@ -115,11 +115,11 @@ def monta_pacote_comando(tupla_comando, id, ip_origem, ip_destino):
 	# Numero de words de 32-bits necessario para o pacote
 	numero_words_necessario = int(math.ceil(float(tamanho_pacote) / 32.0))
 
-	# Atualizacao de TotalLength
-	TotalLength = "{0:{fill}16b}".format(tamanho_pacote, fill='0')
-
 	# Atualizacao de IHL
 	IHL = "{0:{fill}4b}".format(numero_words_necessario, fill='0')
+
+	# Atualizacao de TotalLength
+	TotalLength = "{0:{fill}16b}".format(numero_words_necessario * 32, fill='0')
 
 	pacote_pronto = (Version + IHL + TypeOfService + TotalLength + Identification + Flags \
 					+ FragmentOffset + TimeToLive + Protocol + HeaderChecksum + SourceAddress \
