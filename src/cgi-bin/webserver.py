@@ -153,7 +153,7 @@ for comando in lista_comandos:
 		s.connect((TCP_IP, DAEMON_PORT))
 		s.send(pacote)
 		data = s.recv(BUFFER_SIZE)
-		#s.close()
+		s.close()
 		print "Received data:", data, "from Daemon", comando[0]
 	finally:
 		# Fecha a conexao

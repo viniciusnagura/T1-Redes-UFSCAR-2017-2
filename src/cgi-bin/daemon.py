@@ -3,6 +3,7 @@ import socket
 import sys
 import binascii
 import subprocess
+import thread
 
 # -------------------------------------------
 #      F U N C O E S   A U X I L I A R E S   |
@@ -57,6 +58,16 @@ def executa_comando(tupla_pacote):
 			output = 'Comando invalido!'
 	return output
 
+# Thread que executa os comandos passados para o Daemon
+def thread_comando(conn):
+	while 1:
+	    data = conn.recv(BUFFER_SIZE)
+	    if not data: break
+	    print "Output:"
+	    print executa_comando(desmonta_pacote_comando(data))
+	    conn.send(data)
+	conn.close()
+
 # -------------------------------------------
 #                  M A I N                   |
 # -------------------------------------------
@@ -69,19 +80,15 @@ if len(sys.argv) < 2:
 TCP_IP = '127.0.0.1'
 TCP_PORT = int(sys.argv[1])
 
+BUFFER_SIZE = 1024
+
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.bind((TCP_IP, TCP_PORT))
+s.listen(1)
+
 while 1:
-	BUFFER_SIZE = 2048
-
-	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	s.bind((TCP_IP, TCP_PORT))
-	s.listen(1)
-
 	conn, addr = s.accept()
 	print 'Connection address:', addr
-	while 1:
-	    data = conn.recv(BUFFER_SIZE)
-	    if not data: break
-	    print "Output:"
-	    print executa_comando(desmonta_pacote_comando(data))
-	    conn.send(data)
-	conn.close()
+
+	# Threads para multiplos comandos
+	thread.start_new_thread(thread_comando, (conn,))
