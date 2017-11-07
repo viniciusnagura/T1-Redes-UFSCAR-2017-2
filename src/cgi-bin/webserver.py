@@ -133,9 +133,10 @@ def monta_pacote_comando(tupla_comando, id, ip_origem, ip_destino):
 # -------------------------------------------
 
 print "Content-type: text/html\r\n\r\n";
-print "<font size=+1>Environment</font></br>";
-
 print "<pre>"
+
+#print "<button type=\"button\" style=\"margin-left: 50% onclick=\"alert(\'Hello world!\')\">Retornar</button>"
+print "<input type=\"button\" onclick=\"location.href=\'../index.html\'\" value=\"Retornar\" style=\"display: block; margin: 0 auto;\">"
 
 TCP_IP = '127.0.0.1'
 TCP_PORT_BASE = 8000
@@ -144,6 +145,10 @@ MESSAGE = "Hello, World!"
 
 # Recebe os comandos a serem passados para as maquinas
 lista_comandos = le_parametros_html()
+
+outputs_daemon = ["\n<h3>MACHINE 1:</h3>", \
+					"\n<h3>MACHINE 2:</h3>", \
+					"\n<h3>MACHINE 3:</h3>"]
 
 for comando in lista_comandos:
 	DAEMON_PORT = TCP_PORT_BASE + comando[0]
@@ -154,10 +159,13 @@ for comando in lista_comandos:
 		s.send(pacote)
 		data = s.recv(BUFFER_SIZE)
 		s.close()
-		print "Received data:", data, "from Daemon", comando[0]
+		outputs_daemon[comando[0] - 1]+=(data)
 	finally:
 		# Fecha a conexao
 		s.close()
+
+for output in outputs_daemon:
+	print output
 
 print "</pre>"
 

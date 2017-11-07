@@ -52,20 +52,42 @@ def executa_comando(tupla_pacote):
 	# Executa o comando e retorna o output
 	while True:
 		try:
-			output = subprocess.check_output([comando, parametro], stderr=subprocess.STDOUT, shell=True)
+			output = subprocess.check_output([(comando + ' ' + parametro),], stderr=subprocess.STDOUT, shell=True)
 			break
-		except ValueError:
-			output = 'Comando invalido!'
+		except subprocess.CalledProcessError as e:
+			output = e.output
+			break
 	return output
 
 # Thread que executa os comandos passados para o Daemon
 def thread_comando(conn):
 	while 1:
 	    data = conn.recv(BUFFER_SIZE)
+	    
 	    if not data: break
-	    print "Output:"
-	    print executa_comando(desmonta_pacote_comando(data))
-	    conn.send(data)
+	    
+	    # Pacote recebido
+	    pacote = desmonta_pacote_comando(data)
+	    
+	    # Identifica o comando da tupla
+	    if (pacote[8] == 1):
+	    	comando = 'ps'
+	    elif (pacote[8] == 2):
+	    	comando = 'df'
+	    elif (pacote[8] == 3):
+	    	comando = 'finger'
+	    elif (pacote[8] == 4):
+	    	comando = 'uptime'
+
+	    output = executa_comando(pacote)
+	    
+	    resposta = "----------------------------------------------------------------------------\n" + \
+	    			("    Output do comando " + comando + " " + pacote[12]).ljust(76, ' ') + "|\n" + \
+	    			"----------------------------------------------------------------------------\n" + \
+	    			output + "\n"
+	    print resposta
+
+	    conn.send(resposta)
 	conn.close()
 
 # -------------------------------------------
