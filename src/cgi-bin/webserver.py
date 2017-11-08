@@ -70,6 +70,43 @@ def le_parametros_html():
 
 	return tuplas_finais
 
+# Funcao que calcula o Checksum de um pacote, baseado no conteudo em:
+# https://www.codeproject.com/Tips/460867/Python-Implementation-of-IP-Checksum
+def checksum(header):
+	tamanho = 0
+	lista_duplo_bytes = []
+	for i in range(0, len(header), 2):
+		lista_duplo_bytes.append(header[i:i+2])
+		tamanho += 1
+	checksum = 0
+	pointer = 0
+	while tamanho > 1:
+		checksum += int((lista_duplo_bytes[pointer] + lista_duplo_bytes[pointer + 1]), 16)
+		tamanho -= 2
+		pointer += 2
+	if tamanho:
+		checksum += lista_duplo_bytes[pointer]
+	checksum = (checksum >> 16) + (checksum & 0xffff)
+	checksum += (checksum >>16)
+	return "{0:{fill}16b}".format(int((~checksum) & 0xFFFF), fill='0')
+
+# Funcao que compara checksum
+def valida_checksum(pacote_desmontado):
+	'''
+	Recebe um pacote DESMONTADO e verifica se a validade do Header Checksum
+	'''
+	# Pega o campo de checksum
+	checksum_recebido = pacote_desmontado[9]
+	# Monta um pacote cujo campo HeaderChecksum esta zerado ('0000000000000000')
+	checksum_zerado = pacote_desmontado[13][0:80] + '0000000000000000' + pacote_desmontado[13][96:]
+	# Calcula o checksum do pacote acim
+	checksum_calculado = checksum(checksum_zerado)
+	# Por fim, valida se sao iguais ou nao
+	if(checksum_recebido ==  checksum_calculado):
+		return True
+	else:
+		return False
+
 # Montagem do pacote de requisicao
 def monta_pacote_comando(tupla_comando, id, ip_origem, ip_destino):
 	'''
@@ -112,6 +149,10 @@ def monta_pacote_comando(tupla_comando, id, ip_origem, ip_destino):
 	IHL = "{0:{fill}4b}".format(numero_words_necessario, fill='0')
 	# Atualizacao de TotalLength
 	TotalLength = "{0:{fill}16b}".format(numero_words_necessario * 32, fill='0')
+	# Atualiza o campo Header Checksum
+	HeaderChecksum = checksum((Version + IHL + TypeOfService + TotalLength + Identification + Flags \
+								+ FragmentOffset + TimeToLive + Protocol + HeaderChecksum + SourceAddress \
+								+ DestinationAddress + Options).ljust(numero_words_necessario * 32, '0'))
 	# Montagem do pacote ja com padding
 	pacote_pronto = (Version + IHL + TypeOfService + TotalLength + Identification + Flags \
 					+ FragmentOffset + TimeToLive + Protocol + HeaderChecksum + SourceAddress \
@@ -137,9 +178,12 @@ def desmonta_pacote_resposta(pacote):
 	SourceAddress = pacote[96:128]
 	DestinationAddress = pacote[128:160]
 	Data = ''.join(chr(int(pacote[160:][i:i+8], 2)) for i in xrange(0, len(pacote[160:]), 8))
+	Cabecalho = pacote[0:160]
+
+	# Ultimo elemento eh o cabecalho (util para conferir o checksum)
 	return (Versao, IHL, TypeOfService, TotalLength, Identification, Flags,\
 			FragmentOffset, TimeToLive, Protocol, HeaderChecksum, SourceAddress,\
-			DestinationAddress, Data)
+			DestinationAddress, Data, Cabecalho)
 
 
 # -------------------------------------------
@@ -183,10 +227,10 @@ for comando in lista_comandos:
 			else:
 				# Recebe um dos pacotes de resposta e o desmonta
 				pacote_resposta = desmonta_pacote_resposta(data)
-				# Verifica se o pacote eh de resposta
-				if(pacote_resposta[5] == '111'):
+				# Valida o checksum e verifica se o pacote eh de resposta
+				if(valida_checksum(pacote_resposta) and pacote_resposta[5] == '111'):
 					# Se for, concatena a string de respostacom as respostas ja recebidas
-					outputs_daemon[comando[0] - 1]+=(pacote_resposta[12])
+					outputs_daemon[comando[0] - 1] += (pacote_resposta[12])
 	finally:
 		# Fecha a conexao
 		s.close()
